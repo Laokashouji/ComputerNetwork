@@ -15,19 +15,21 @@
 #define PORT 53   //53端口号
 #define DEF_DNS_ADDRESS "192.168.31.1"	//ipconfig/all 得知外部服务器dns地址
 #define LOCAL_DNS_ADDRESS "127.0.0.1" //本地DNS服务器地址
-#define AMOUNT 1500//最大ID转换表大小
+#define MAX_DNS_SIZE 1500//最大ID转换表大小
 #define NOTFOUND 32767 //没有找到
-#define URL_LENGTH 64 //0~63
+#define ISFOUND 1
+#define DOMAIN_LENGTH 64 //0~63
+#define FULL_DOMAIN_LENGTH 253
 #define LOCAL_DNS_FILE "E:\\Codefield\\C\\ComputerNetwork\\doc\\dnsrelay.txt"
 //DNS报文首部 12字节
 typedef struct DNSHeader
 {
-    unsigned short ID; //标志
-    unsigned short Flags; //标识
-    unsigned short QuestionNum;  //问题数
-    unsigned short AnswerNum; //资源记录数
-    unsigned short AuthorNum; //授权资源记录数
-    unsigned short AdditionNum; //额外资源记录数
+    u_short ID; //标志
+    u_short Flags; //标识
+    u_short QuestionNum;  //问题数
+    u_short AnswerNum; //资源记录数
+    u_short AuthorNum; //授权资源记录数
+    u_short AdditionNum; //额外资源记录数
 } DNSHDR;
 
 //DNS域名解析表结构
@@ -40,7 +42,7 @@ typedef struct translate
 //ID转换表结构
 typedef struct IDChange
 {
-    unsigned short oldID;			//原有ID
+    u_short oldID;			//原有ID
     BOOL done;						//标记是否完成解析
     SOCKADDR_IN client;				//请求者套接字地址
 } IDTransform;
