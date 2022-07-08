@@ -8,7 +8,7 @@ include_directories(lib)
 add_executable(ComputerNetwork
         lib/MyFunction.h
         lib/datastructure.h
-        src/main.c src/MyFunction.c)
+        src/main.c src/MyFunction.c src/MySocket.c src/MySocket.h)
 
 add_executable(test src/test.c)
 

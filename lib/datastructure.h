@@ -17,8 +17,8 @@
 #define LOCAL_DNS_ADDRESS "127.0.0.1" //本地DNS服务器地址
 #define AMOUNT 1500//最大ID转换表大小
 #define NOTFOUND 32767 //没有找到
-#define LENGTHOFURL 64 //0~63
-
+#define URL_LENGTH 64 //0~63
+#define LOCAL_DNS_FILE "E:\\Codefield\\C\\ComputerNetwork\\doc\\dnsrelay.txt"
 //DNS报文首部 12字节
 typedef struct DNSHeader
 {
@@ -28,7 +28,7 @@ typedef struct DNSHeader
     unsigned short AnswerNum; //资源记录数
     unsigned short AuthorNum; //授权资源记录数
     unsigned short AdditionNum; //额外资源记录数
-} DNSHDR, * pDNSHDR;
+} DNSHDR;
 
 //DNS域名解析表结构
 typedef struct translate

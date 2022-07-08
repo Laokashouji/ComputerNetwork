@@ -7,16 +7,15 @@
 #include <WinSock2.h>
 #include <windows.h>
 #include <time.h>
-#include <process.h>
 #include "datastructure.h"
 #include "MyFunction.h"
-
-//#pragma comment(lib, "ws2_32.lib")
+#include "MySocket.h"
+#pragma comment(lib, "ws2_32.lib")
 
 Translate DNSTable[AMOUNT];		//DNS域名解析表
 IDTransform IDTransTable[AMOUNT];	//ID转换表
 int IDcount = 0;					//转换表中的条目个数
-char Url[LENGTHOFURL];					//域名
+char domainName[URL_LENGTH];					//域名
 SYSTEMTIME TimeOfSys;                     //系统时间
 int Day, Hour, Minute, Second, Milliseconds;//保存系统时间的变量
 
@@ -31,46 +30,25 @@ int main()
     WSAStartup(MAKEWORD(2, 2), &wsaData);
 
     //创建套接字
-    SOCKET servSock = socket(AF_INET, SOCK_DGRAM, 0);
-    SOCKET localSock = socket(AF_INET, SOCK_DGRAM, 0);
-
-    //将套接口都设置为非阻塞
-    int unBlock = 1;
-    ioctlsocket(servSock, FIONBIO, (u_long FAR*) &unBlock);//将外部套街口设置为非阻塞
-    ioctlsocket(localSock, FIONBIO, (u_long FAR*) &unBlock);//将本地套街口设置为非阻塞
+    SOCKET servSock = createSock(1);
+    SOCKET localSock = createSock(1);
 
     //绑定套接字
     SOCKADDR_IN serverName, clientName, localName;	//本地DNS、外部DNS和请求端三个网络套接字地址
-    localName.sin_family = AF_INET;
-    localName.sin_port = htons(PORT);
-    localName.sin_addr.s_addr = inet_addr(LOCAL_DNS_ADDRESS);
-    serverName.sin_family = AF_INET;
-    serverName.sin_port = htons(PORT);
-    serverName.sin_addr.s_addr = inet_addr(DEF_DNS_ADDRESS);
+    setSockAddr(&localName, PORT, LOCAL_DNS_ADDRESS);
+    setSockAddr(&serverName, PORT, DEF_DNS_ADDRESS);
 
-    //绑定本地服务器地址
-    if (bind(localSock, (SOCKADDR*)&localName, sizeof(localName)))
-    {
-        printf("Bind 53 port failed.\n");
-        exit(-1);
-    }
-    else
-        printf("Bind 53 port success.\n");
+    bindSock(localSock, &localName);
 
     char sendBuf[BUFSIZE]; //发送缓存
     char recvBuf[BUFSIZE]; //接收缓存
-    char* Path = (char*)malloc(sizeof(char)*100);
-    int recordNum; //txt文件有效行数
-    int iLen_cli, iSend, iRecv;
+    int recordNum = InitialDNSTable(); //本地DNS文件有效行数
 
-    strcpy(Path, "E:\\Codefield\\C\\ComputerNetwork\\doc\\dnsrelay.txt");
-    recordNum = InitialDNSTable(Path);
+    int clientLength = sizeof(clientName);
+    int iSend;
+
     //保存系统时间
-    GetLocalTime(&TimeOfSys);
-    Day = TimeOfSys.wDay;
-    Hour = TimeOfSys.wHour;
-    Minute = TimeOfSys.wMinute;
-    Milliseconds = TimeOfSys.wMilliseconds;
+    setTime();
 
     int find;
     unsigned short NewID;
@@ -79,31 +57,25 @@ int main()
     //下面是服务器的具体操作
     while (1)
     {
-        iLen_cli = sizeof(clientName);
         memset(recvBuf, 0, BUFSIZE); //将接收缓存先置为全0
 
         //接收DNS请求
         //函数：int recvfrom(int s, void* buf, int len, unsigned int flags, struct sockaddr* from, int* fromlen);
         //函数说明：recv()用来接收远程主机经指定的socket 传来的数据, 并把数据存到由参数buf 指向的内存空间, 参数len 为可接收数据的最大长度.
         //参数flags 一般设0, 其他数值定义请参考recv().参数from 用来指定欲传送的网络地址, 结构sockaddr 请参考bind().参数fromlen 为sockaddr 的结构长度.
-        iRecv = recvfrom(localSock, recvBuf, sizeof(recvBuf), 0, (SOCKADDR*)&clientName, &iLen_cli);
+        int recvnum = recvfrom(localSock, recvBuf, sizeof(recvBuf), 0, (SOCKADDR*)&clientName, &clientLength);
         //错误反馈
-        if (iRecv == SOCKET_ERROR)
+        if (recvnum == SOCKET_ERROR || recvnum == 0)
         {
             //printf("Recvfrom Failed: %s\n", strerror(WSAGetLastError()));
             continue; //强制开始下一次循环
         }
-        else if (iRecv == 0)
-        {
-            continue; //没东西，跳出循环0
-        }
         else
         {
-            GetUrl(recvBuf, iRecv);				//获取域名
-            find = IsFind(Url, recordNum);		//在域名解析表中查找
+            GetUrl(recvBuf, recvnum);				//获取域名
+            find = IsFind(domainName, recordNum);		//在域名解析表中查找
 
-            //printf("We have get the url: %s\n", Url);
-
+            //printf("We have get the url: %s\n", domainName);
             //printf("%d\n", find);
 
             //开始分情况讨论
@@ -122,7 +94,7 @@ int main()
                 PrintInfo(ntohs(NewID), find);
 
                 //把recvbuf转发至指定的外部DNS服务器
-                iSend = sendto(servSock, recvBuf, iRecv, 0, (SOCKADDR*)&serverName, sizeof(serverName));
+                iSend = sendto(servSock, recvBuf, recvnum, 0, (SOCKADDR*)&serverName, sizeof(serverName));
                 if (iSend == SOCKET_ERROR)
                 {
                     //printf("sendto Failed: %s\n", strerror(WSAGetLastError()));
@@ -139,10 +111,10 @@ int main()
 
                 //接收来自外部DNS服务器的响应报文
                 start = clock();
-                iRecv = recvfrom(servSock, recvBuf, sizeof(recvBuf), 0, (SOCKADDR*)&clientName, &iLen_cli);
-                while ((iRecv == 0) || (iRecv == SOCKET_ERROR))
+                recvnum = recvfrom(servSock, recvBuf, sizeof(recvBuf), 0, (SOCKADDR*)&clientName, &clientLength);
+                while ((recvnum == 0) || (recvnum == SOCKET_ERROR))
                 {
-                    iRecv = recvfrom(servSock, recvBuf, sizeof(recvBuf), 0, (SOCKADDR*)&clientName, &iLen_cli);
+                    recvnum = recvfrom(servSock, recvBuf, sizeof(recvBuf), 0, (SOCKADDR*)&clientName, &clientLength);
                     stop = clock();
                     duration = (double)(stop - start) / CLK_TCK;
                     if (duration > 5)
@@ -160,7 +132,7 @@ int main()
                 IDTransTable[GetId].done = TRUE;
 
                 //char* urlname;
-                //memcpy(urlname, &(recvBuf[sizeof(DNSHDR)]), iRecv - 12);	//获取请求报文中的域名表示，要去掉DNS报文首部的12字节
+                //memcpy(urlname, &(recvBuf[sizeof(DNSHDR)]), recvnum - 12);	//获取请求报文中的域名表示，要去掉DNS报文首部的12字节
                 //char* NewIP;
 
                 //打印 时间 newID 功能 域名 IP
@@ -172,7 +144,7 @@ int main()
                 //printf("We get a answer from SERVER, now we give it back to client.\n");
 
                 //把recvbuf转发至请求者处
-                iSend = sendto(localSock, recvBuf, iRecv, 0, (SOCKADDR*)&clientName, sizeof(clientName));
+                iSend = sendto(localSock, recvBuf, recvnum, 0, (SOCKADDR*)&clientName, sizeof(clientName));
                 if (iSend == SOCKET_ERROR)
                 {
                     //printf("sendto Failed: %s\n\n", strerror(WSAGetLastError()));
@@ -201,7 +173,7 @@ int main()
                 PrintInfo(nID, find);
                 //参考：https://blog.csdn.net/weixin_34192993/article/details/87949701
                 //构造响应报文头
-                memcpy(sendBuf, recvBuf, iRecv); //拷贝请求报文
+                memcpy(sendBuf, recvBuf, recvnum); //拷贝请求报文
                 unsigned short AFlag = htons(0x8180); //htons的功能：将主机字节序转换为网络字节序，即大端模式(big-endian) 0x8180为DNS响应报文的标志Flags字段
                 memcpy(&sendBuf[2], &AFlag, sizeof(unsigned short)); //修改标志域,绕开ID的两字节
 
@@ -241,11 +213,11 @@ int main()
                 unsigned long IP = (unsigned long)inet_addr(DNSTable[find].IP); //inet_addr为IP地址转化函数
                 memcpy(answer + curLen, &IP, sizeof(unsigned long));
                 curLen += sizeof(unsigned long);
-                curLen += iRecv;
+                curLen += recvnum;
 
 
                 //请求报文和响应部分共同组成DNS响应报文存入sendbuf
-                memcpy(sendBuf + iRecv, answer, curLen);
+                memcpy(sendBuf + recvnum, answer, curLen);
 
                 //printf("Create Over, give it to client.\n");
 
