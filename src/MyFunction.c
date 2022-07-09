@@ -68,9 +68,9 @@ void setTime() {
 //获取DNS请求中的域名
 void getDomainName(char *recvbuf, char *domainName)
 {
-    char queryName[FULL_DOMAIN_LENGTH];
+    char queryName[FULL_DOMAIN_LENGTH + 10];
     memset(domainName, 0, FULL_DOMAIN_LENGTH);
-    memcpy(queryName, &recvbuf[DNSHEADER], FULL_DOMAIN_LENGTH);
+    memcpy(queryName, recvbuf + DNSHEADER, FULL_DOMAIN_LENGTH + 10);
     int len = strlen(queryName);
 
     int i = 0, j = 0, k = 0;
@@ -229,4 +229,7 @@ void response(char *recvBuf, int recvnum, int find, SOCKET localSock, SOCKADDR_I
     free(ID); //释放动态分配的内存
 }
 
+void transit()
+{
 
+}

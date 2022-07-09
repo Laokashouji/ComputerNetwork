@@ -13,5 +13,6 @@ int searchInLocalDNSTable(char* domainName, int num);//判断能不能在本中�
 u_short ReplaceNewID(u_short OldID, SOCKADDR_IN temp, BOOL ifdone); //将请求ID转换为新的ID，并将信息写入ID转换表中
 void response(char *recvBuf, int recvnum, int find, SOCKET localSock, SOCKADDR_IN clientName, char *domainName);
 void PrintInfo(u_short ID, int find, char* domainName); //打印 时间 ID 功能 域名 IP
+void transit();
 
 #endif //C_MYFUNCTION_H
