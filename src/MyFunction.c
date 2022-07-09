@@ -228,8 +228,3 @@ void response(char *recvBuf, int recvnum, int find, SOCKET localSock, SOCKADDR_I
 
     free(ID); //释放动态分配的内存
 }
-
-void transit()
-{
-
-}
