@@ -22,6 +22,7 @@
 #define IP4_LENGTH 4
 #define MAX_IP4STRING_LENGTH 15
 #define DOMAIN_LENGTH 64 //0~63
+#define MAX_DNS_SIZE 512
 #define FULL_DOMAIN_LENGTH 253
 #define LOCAL_DNS_FILE "../doc/dnsrelay.txt"
 #define WAIT_TIME 5

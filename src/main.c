@@ -41,13 +41,9 @@ int main()
 
     char recvBuf[BUFSIZE]; //接收缓存
     int recordNum = loadLocalDNSTable(); //本地DNS文件有效行数
-
     int clientLength = sizeof(clientName);
-    int iSend;
-
     //保存系统时间
     setTime();
-
     //下面是服务器的具体操作
     while (1)
     {
@@ -58,95 +54,100 @@ int main()
         //函数说明：recv()用来接收远程主机经指定的socket 传来的数据, 并把数据存到由参数buf 指向的内存空间, 参数len 为可接收数据的最大长度.
         //参数flags 一般设0, 其他数值定义请参考recv().参数from 用来指定欲传送的网络地址, 结构sockaddr 请参考bind().参数fromlen 为sockaddr 的结构长度.
         int recvnum = recvfrom(localSock, recvBuf, sizeof(recvBuf), 0, (SOCKADDR*)&clientName, &clientLength);
-        //错误反馈
         if (recvnum == SOCKET_ERROR || recvnum == 0)
-            continue; //强制开始下一次循环
+            continue;
         else
         {
-            char* domainName = (char*) malloc(FULL_DOMAIN_LENGTH);
+            char* domainName = (char*) malloc(FULL_DOMAIN_LENGTH + 1);
             getDomainName(recvBuf, domainName);				//获取域名
             int find = searchInLocalDNSTable(domainName, recordNum);		//在域名解析表中查找
-
-            //打印 时间 newID 功能 域名 IP
+            //打印请求信息
             PrintInfo(find, domainName);
-
             //在域名解析表中没有找到
             if (find == NOTFOUND)
             {
                 //ID转换,用于实现多用户查询
-                u_short* pID = (u_short*)malloc(sizeof(u_short*));
-                memcpy(pID, recvBuf, sizeof(u_short)); //报文前两字节为ID
-                u_short NewID = htons(getNewID(ntohs(*pID), clientName));
+                u_short* ID = (u_short*)malloc(sizeof(u_short*));
+                memcpy(ID, recvBuf, sizeof(u_short)); //报文前两字节为ID
+                u_short NewID = htons(getNewID(ntohs(*ID), clientName));
                 memcpy(recvBuf, &NewID, sizeof(u_short));
 
                 //转发
-                iSend = sendto(servSock, recvBuf, recvnum, 0, (SOCKADDR*)&serverName, sizeof(serverName));
-                if (iSend == SOCKET_ERROR || iSend == 0)
+                int sendLength = sendto(servSock, recvBuf, recvnum, 0, (SOCKADDR*)&serverName, sizeof(serverName));
+                if (sendLength == SOCKET_ERROR || sendLength == 0)
                     continue;
-
-                clock_t stop; //定时
-                double duration = 0;
 
                 //接收来自外部DNS服务器的响应报文
                 clock_t start = clock();
+                double duration = 0;
                 recvnum = recvfrom(servSock, recvBuf, sizeof(recvBuf), 0, (SOCKADDR*)&clientName, &clientLength);
                 while ((recvnum == 0) || (recvnum == SOCKET_ERROR))
                 {
                     recvnum = recvfrom(servSock, recvBuf, sizeof(recvBuf), 0, (SOCKADDR*)&clientName, &clientLength);
-                    stop = clock();
-                    duration = (double)(stop - start) / CLK_TCK;
-                    if (duration > 5)
-                    {
-                        printf("Long Time No Response From Server.\n");
-                        goto ps;
-                    }
+                    duration = (clock() - start) / CLK_TCK > WAIT_TIME;
+                    if (duration > WAIT_TIME)
+                        break;
                 }
+                if (duration > WAIT_TIME)
+                    continue;
+
                 //ID转换
-                pID = (u_short*)malloc(sizeof(u_short*));
-                memcpy(pID, recvBuf, sizeof(u_short)); //报文前两字节为ID
-                int GetId = ntohs(*pID); //ntohs的功能：将网络字节序转换为主机字节序
-                u_short oID = htons(IDTransTable[GetId].oldID);
-                memcpy(recvBuf, &oID, sizeof(u_short));
-                IDTransTable[GetId].unavailable = TRUE;
-
-                //char* urlname;
-                //memcpy(urlname, &(recvBuf[sizeof(DNSHDR)]), recvnum - 12);	//获取请求报文中的域名表示，要去掉DNS报文首部的12字节
-                //char* NewIP;
-
-                //打印 时间 newID 功能 域名 IP
-                PrintInfo(find, domainName);
+                memcpy(ID, recvBuf, sizeof(u_short)); //报文前两字节为ID
+                int newID = ntohs(*ID); //ntohs的功能：将网络字节序转换为主机字节序
+                u_short oldID = htons(IDTransTable[newID].oldID);
+                memcpy(recvBuf, &oldID, sizeof(u_short));
+                IDTransTable[newID].unavailable = FALSE;
 
                 //从ID转换表中获取发出DNS请求者的信息
-                clientName = IDTransTable[GetId].client;
-
-                //printf("We get a answer from SERVER, now we give it back to client.\n");
+                clientName = IDTransTable[newID].client;
 
                 //把recvbuf转发至请求者处
-                iSend = sendto(localSock, recvBuf, recvnum, 0, (SOCKADDR*)&clientName, sizeof(clientName));
-                if (iSend == SOCKET_ERROR)
-                {
-                    //printf("sendto Failed: %s\n\n", strerror(WSAGetLastError()));
-                    continue;
-                }
-                else if (iSend == 0)
-                    continue;
-
-                free(pID); //释放动态分配的内存
+                sendto(localSock, recvBuf, recvnum, 0, (SOCKADDR*)&clientName, sizeof(clientName));
+                free(ID); //释放动态分配的内存
             }
 
             //在域名解析表中找到
             else
             {
-                response(recvBuf, recvnum, find, localSock, clientName, domainName);
+                //构造响应报文标志位
+                char sendBuf[MAX_DNS_SIZE];
+                memcpy(sendBuf, recvBuf, recvnum);
+                u_short flags, ARRs;
+                //构造相应报文应答资源个数
+                if (strcmp(DNSTable[find].IP, "0.0.0.0") == 0) {
+                    flags = htons(0x8183);
+                    ARRs = htons(0x0000);
+                }
+                else {
+                    flags = htons(0x8180);
+                    ARRs = htons(0x0001);
+                }
+                memcpy(sendBuf + 2, &flags, sizeof(u_short));
+                memcpy(sendBuf + 6, &ARRs, sizeof(u_short)); //修改回答记录数，绕开ID两字节、Flags两字节、问题记录数两字节
+
+                //构造DNS应答部分
+                //参考：http://c.biancheng.net/view/6457.html
+                char answer[16];
+                int len = getAnswer(answer);
+
+                //存入本地数据中对应域名的IP地址
+                u_long IP = (u_long)inet_addr(DNSTable[find].IP); //inet_addr为IP地址转化函数
+                memcpy(answer + len, &IP, sizeof(u_long));
+                len += sizeof(u_long);
+
+                int queryLength = getQueryLength(sendBuf);
+
+                //请求报文和响应部分共同组成DNS响应报文存入sendbuf
+                //memcpy(sendBuf + queryLength, answer, len);
+                memcpy(sendBuf + recvnum, answer, len);
+                sendto(localSock, sendBuf, len + recvnum, 0, (SOCKADDR*)&clientName, sizeof(clientName));
             }
         }
-        ps:;
     }
 
     closesocket(servSock);
     closesocket(localSock);
-    WSACleanup();				//释放ws2_32.dll动态链接库初始化时分配的资源
+    WSACleanup();
 
-    system("pause");
     return 0;
 }

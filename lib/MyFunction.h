@@ -11,9 +11,7 @@ void setTime();//获取系统时间
 void getDomainName(char *recvbuf, char *domainName); //获取DNS请求中的域名
 int searchInLocalDNSTable(char* domainName, int num);//判断能不能在本中找到DNS请求中的域名，找到返回下标
 u_short getNewID(u_short OldID, SOCKADDR_IN sock); //将请求ID转换为新的ID，并将信息写入ID转换表中
-void response(char *recvBuf, int recvnum, int find, SOCKET localSock, SOCKADDR_IN clientName, char *domainName);
 void PrintInfo(int find, char *domainName); //打印 时间 ID 功能 域名 IP
-void transit(char *recvBuf, int recvnum, char *domainName, SOCKET servSock, SOCKADDR_IN serverName,
-             SOCKADDR_IN *clientName, SOCKET localSock);
-
+int getAnswer(char* answer);
+int getQueryLength(char* buf);
 #endif //C_MYFUNCTION_H

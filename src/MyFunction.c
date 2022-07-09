@@ -128,7 +128,6 @@ void PrintInfo(int find, char *domainName)
         printf("relay\t");
         //打印域名
         printf("%s\t", domainName);
-        //打印IP
         printf("\n");
     }
     else
@@ -153,61 +152,41 @@ void PrintInfo(int find, char *domainName)
     }
 }
 
-void response(char *recvBuf, int recvnum, int find, SOCKET localSock, SOCKADDR_IN clientName, char *domainName) {
-    //获取请求报文的ID
-    u_short* ID = (u_short*)malloc(sizeof(u_short*));
-    memcpy(ID, recvBuf, sizeof(u_short));
+int getAnswer(char *answer)
+ {
+    int len = 0;
+    //域名,指针形式
+     u_short name = htons(0xc00c);
+     memcpy(answer, &name, sizeof(u_short));
+     len += sizeof(u_short);
+    //类型
+     u_short TypeA = htons(0x0001);
+     memcpy(answer + len, &TypeA, sizeof(u_short));
+     len += sizeof(u_short);
+    //类
+     u_short ClassA = htons(0x0001);
+     memcpy(answer + len, &ClassA, sizeof(u_short));
+     len += sizeof(u_short);
+     //生存时间
+     u_long timeLive = htonl(0x1e);
+     memcpy(answer + len, &timeLive, sizeof(u_long));
+     len += sizeof(u_long);
+     //资源长度,IPv4地址4字节
+     u_short RDLength = htons(0x0004);
+     memcpy(answer + len, &RDLength, sizeof(u_short));
+     len += sizeof(u_short);
 
-    //打印 时间 newID 功能 域名 IP
-    PrintInfo(ISFOUND, domainName);
+     return len;
+ }
 
-    //构造响应报文头
-    char sendBuf[BUFSIZ];
-    memcpy(sendBuf, recvBuf, recvnum); //拷贝请求报文
-    u_short AFlag = htons(0x8180); //htons的功能：将主机字节序转换为网络字节序，即大端模式(big-endian) 0x8180为DNS响应报文的标志Flags字段
-    memcpy(&sendBuf[2], &AFlag, sizeof(u_short)); //修改标志域,绕开ID的两字节
-
-    //修改回答数域
-    if (strcmp(DNSTable[find].IP, "0.0.0.0") == 0)
-        AFlag = htons(0x0000);	//屏蔽功能：回答数为0
-    else
-        AFlag = htons(0x0001);	//服务器功能：回答数为1
-    memcpy(&sendBuf[6], &AFlag, sizeof(u_short)); //修改回答记录数，绕开ID两字节、Flags两字节、问题记录数两字节
-
-    int curLen = 0; //不断更新的长度
-
-    //构造DNS响应部分
-    //参考：http://c.biancheng.net/view/6457.html
-    char answer[16];
-    u_short Name = htons(0xc00c);
-    memcpy(answer, &Name, sizeof(u_short));
-    curLen += sizeof(u_short);
-
-    u_short TypeA = htons(0x0001);
-    memcpy(answer + curLen, &TypeA, sizeof(u_short));
-    curLen += sizeof(u_short);
-
-    u_short ClassA = htons(0x0001);
-    memcpy(answer + curLen, &ClassA, sizeof(u_short));
-    curLen += sizeof(u_short);
-
-    //TTL四字节
-    unsigned long timeLive = htonl(0x7b);
-    memcpy(answer + curLen, &timeLive, sizeof(unsigned long));
-    curLen += sizeof(unsigned long);
-
-    u_short RDLength = htons(0x0004);
-    memcpy(answer + curLen, &RDLength, sizeof(u_short));
-    curLen += sizeof(u_short);
-
-    unsigned long IP = (unsigned long)inet_addr(DNSTable[find].IP); //inet_addr为IP地址转化函数
-    memcpy(answer + curLen, &IP, sizeof(unsigned long));
-    curLen += sizeof(unsigned long);
-    curLen += recvnum;
-
-    //请求报文和响应部分共同组成DNS响应报文存入sendbuf
-    memcpy(sendBuf + recvnum, answer, curLen);
-    sendto(localSock, sendBuf, curLen, 0, (SOCKADDR*)&clientName, sizeof(clientName));
-
-    free(ID); //释放动态分配的内存
-}
+ int getQueryLength(char* buf)
+ {
+    //首部12字节
+    int i = 12;
+    //查询名
+    while(buf[i] != 0)
+        i++;
+    i++;
+    //查询类型和查询名
+    return i + 4;
+ }
