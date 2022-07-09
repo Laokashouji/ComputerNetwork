@@ -15,8 +15,8 @@
 #pragma  comment(lib, "Ws2_32.lib") //加载 ws2_32.dll
 
 extern Translate DNSTable[MAX_TABLE_SIZE];		//DNS域名解析表
-extern IDTransform IDTransTable[MAX_TABLE_SIZE];	//ID转换表
-extern int IDcount;					//转换表中的条目个数
+extern IDTable IDTransTable[MAX_TABLE_SIZE];	//ID转换表
+extern int IDNum;					//转换表中的条目个数
 extern SYSTEMTIME TimeOfSys;                     //系统时间
 extern int Day, Hour, Minute, Second, Milliseconds;//保存系统时间的变量
 
@@ -101,69 +101,52 @@ int searchInLocalDNSTable(char* domainName, int num)
 }
 
 //将请求ID转换为新的ID，并将信息写入ID转换表中
-u_short ReplaceNewID(u_short OldID, SOCKADDR_IN temp, BOOL ifdone)
+u_short getNewID(u_short OldID, SOCKADDR_IN sock)
 {
-    srand(time(NULL)); //随机数种子
-    IDTransTable[IDcount].oldID = OldID;
-    IDTransTable[IDcount].client = temp;
-    IDTransTable[IDcount].done = ifdone;
-    IDcount++; //ID转换表数目要更新~
+    while(IDTransTable[IDNum].unavailable == TRUE)
+        IDNum = (IDNum + 1) % MAX_TABLE_SIZE;
+    IDTransTable[IDNum].oldID = OldID;
+    IDTransTable[IDNum].client = sock;
+    IDTransTable[IDNum].unavailable = TRUE;
 
-    return (u_short)(IDcount - 1);	//以表中下标作为新的ID
+    return (u_short)IDNum;	//以表中下标作为新的ID
 }
 
 //打印 时间 ID 功能 域名 IP
-void PrintInfo(u_short ID, int find, char* domainName)
+void PrintInfo(int find, char *domainName)
 {
     //打印时间
-    GetLocalTime(&TimeOfSys);
-    //输出指定长度的字符串, 超长时不截断, 不足时左对齐:
-    //printf("%-ns", str);            --n 为指定长度的10进制数值
-    int Btime;
-    int Ltime;
-    Btime = ((((TimeOfSys.wDay - Day) * 24 + TimeOfSys.wHour - Hour) * 60 + TimeOfSys.wMinute - Minute) * 60) + TimeOfSys.wSecond - Second;
-    Ltime = abs(TimeOfSys.wMilliseconds - Milliseconds);
-    printf("%d.%d   %d", Btime, Ltime, ID);
-    printf("    ");
+    char timestr[128]="";
+    time_t now;
+    time(&now);
+    strftime(timestr, 128, "%Y-%m-%d %H:%M:%S", localtime(&now));
+    printf("%s\t", timestr);
 
-    //在表中没有找到DNS请求中的域名
     if (find == NOTFOUND)
     {
         //中继功能
-        printf("中继");
-        printf("    ");
+        printf("relay\t");
         //打印域名
-        printf("%s", domainName);
-        printf("    ");
+        printf("%s\t", domainName);
         //打印IP
         printf("\n");
     }
-
-        //在表中找到DNS请求中的域名
-    else if(find == ISFOUND)
+    else
     {
         if (strcmp(DNSTable[find].IP, "0.0.0.0") == 0)  //不良网站拦截
         {
             //屏蔽功能
-            printf("屏蔽");
-            printf("    ");
-            //打印域名(加*)
-            //打印域名
-            printf("***%s", domainName);
-            printf("    ");
+            printf("shield\t");
+            printf("***%s\t", domainName);
             //打印IP
             printf("%s\n", DNSTable[find].IP);
         }
-
-            //检索结果为普通IP地址，则向客户返回这个地址
         else
         {
             //服务器功能
-            printf("Local服务器");
-            printf("    ");
+            printf("LocalServer\t");
             //打印域名
-            printf("***%s", domainName);
-            printf("    ");
+            printf("***%s\t", domainName);
             //打印IP
             printf("%s\n", DNSTable[find].IP);
         }
@@ -176,7 +159,7 @@ void response(char *recvBuf, int recvnum, int find, SOCKET localSock, SOCKADDR_I
     memcpy(ID, recvBuf, sizeof(u_short));
 
     //打印 时间 newID 功能 域名 IP
-    PrintInfo(ID, ISFOUND, domainName);
+    PrintInfo(ISFOUND, domainName);
 
     //构造响应报文头
     char sendBuf[BUFSIZ];

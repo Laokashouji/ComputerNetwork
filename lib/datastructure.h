@@ -23,7 +23,9 @@
 #define MAX_IP4STRING_LENGTH 15
 #define DOMAIN_LENGTH 64 //0~63
 #define FULL_DOMAIN_LENGTH 253
-#define LOCAL_DNS_FILE "E:\\Codefield\\C\\ComputerNetwork\\doc\\dnsrelay.txt"
+#define LOCAL_DNS_FILE "../doc/dnsrelay.txt"
+#define WAIT_TIME 5
+
 //DNS报文首部 12字节
 typedef struct DNSHeader
 {
@@ -43,12 +45,12 @@ typedef struct translate
 } Translate;
 
 //ID转换表结构
-typedef struct IDChange
+typedef struct IDTransmit
 {
     u_short oldID;			//原有ID
-    BOOL done;						//标记是否完成解析
     SOCKADDR_IN client;				//请求者套接字地址
-} IDTransform;
+    BOOL unavailable;						//标记是否完成解析
+} IDTable;
 
 
 #endif //COMPUTERNETWORK_DATASTRUCTURE_H

@@ -13,8 +13,8 @@
 #pragma comment(lib, "ws2_32.lib")
 
 Translate DNSTable[MAX_TABLE_SIZE];		//DNS域名解析表
-IDTransform IDTransTable[MAX_TABLE_SIZE];	//ID转换表
-int IDcount = 0;					//转换表中的条目个数
+IDTable IDTransTable[MAX_TABLE_SIZE];	//ID转换表
+int IDNum = 0;					//转换表中的条目个数
 SYSTEMTIME TimeOfSys;                     //系统时间
 int Day, Hour, Minute, Second, Milliseconds;//保存系统时间的变量
 
@@ -48,10 +48,6 @@ int main()
     //保存系统时间
     setTime();
 
-    int find;
-    u_short NewID;
-    u_short* pID;
-
     //下面是服务器的具体操作
     while (1)
     {
@@ -69,38 +65,30 @@ int main()
         {
             char* domainName = (char*) malloc(FULL_DOMAIN_LENGTH);
             getDomainName(recvBuf, domainName);				//获取域名
-            find = searchInLocalDNSTable(domainName, recordNum);		//在域名解析表中查找
+            int find = searchInLocalDNSTable(domainName, recordNum);		//在域名解析表中查找
+
+            //打印 时间 newID 功能 域名 IP
+            PrintInfo(find, domainName);
 
             //在域名解析表中没有找到
             if (find == NOTFOUND)
             {
-                //ID转换
-                pID = (u_short*)malloc(sizeof(u_short*));
+                //ID转换,用于实现多用户查询
+                u_short* pID = (u_short*)malloc(sizeof(u_short*));
                 memcpy(pID, recvBuf, sizeof(u_short)); //报文前两字节为ID
-                NewID = htons(ReplaceNewID(ntohs(*pID), clientName, FALSE));
+                u_short NewID = htons(getNewID(ntohs(*pID), clientName));
                 memcpy(recvBuf, &NewID, sizeof(u_short));
 
-                //打印 时间 newID 功能 域名 IP
-                PrintInfo(ntohs(NewID), find, domainName);
-
-                //把recvbuf转发至指定的外部DNS服务器
+                //转发
                 iSend = sendto(servSock, recvBuf, recvnum, 0, (SOCKADDR*)&serverName, sizeof(serverName));
-                if (iSend == SOCKET_ERROR)
-                {
-                    //printf("sendto Failed: %s\n", strerror(WSAGetLastError()));
-                    continue;
-                }
-                else if (iSend == 0)
+                if (iSend == SOCKET_ERROR || iSend == 0)
                     continue;
 
-                //delete pID; //释放动态分配的内存
-                free(pID);
-
-                clock_t start, stop; //定时
+                clock_t stop; //定时
                 double duration = 0;
 
                 //接收来自外部DNS服务器的响应报文
-                start = clock();
+                clock_t start = clock();
                 recvnum = recvfrom(servSock, recvBuf, sizeof(recvBuf), 0, (SOCKADDR*)&clientName, &clientLength);
                 while ((recvnum == 0) || (recvnum == SOCKET_ERROR))
                 {
@@ -119,14 +107,14 @@ int main()
                 int GetId = ntohs(*pID); //ntohs的功能：将网络字节序转换为主机字节序
                 u_short oID = htons(IDTransTable[GetId].oldID);
                 memcpy(recvBuf, &oID, sizeof(u_short));
-                IDTransTable[GetId].done = TRUE;
+                IDTransTable[GetId].unavailable = TRUE;
 
                 //char* urlname;
                 //memcpy(urlname, &(recvBuf[sizeof(DNSHDR)]), recvnum - 12);	//获取请求报文中的域名表示，要去掉DNS报文首部的12字节
                 //char* NewIP;
 
                 //打印 时间 newID 功能 域名 IP
-                PrintInfo(ntohs(NewID), find, domainName);
+                PrintInfo(find, domainName);
 
                 //从ID转换表中获取发出DNS请求者的信息
                 clientName = IDTransTable[GetId].client;
