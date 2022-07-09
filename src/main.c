@@ -12,10 +12,9 @@
 #include "MySocket.h"
 #pragma comment(lib, "ws2_32.lib")
 
-Translate DNSTable[MAX_DNS_SIZE];		//DNS域名解析表
-IDTransform IDTransTable[MAX_DNS_SIZE];	//ID转换表
+Translate DNSTable[MAX_TABLE_SIZE];		//DNS域名解析表
+IDTransform IDTransTable[MAX_TABLE_SIZE];	//ID转换表
 int IDcount = 0;					//转换表中的条目个数
-char domainName[DOMAIN_LENGTH];					//域名
 SYSTEMTIME TimeOfSys;                     //系统时间
 int Day, Hour, Minute, Second, Milliseconds;//保存系统时间的变量
 
@@ -65,13 +64,11 @@ int main()
         int recvnum = recvfrom(localSock, recvBuf, sizeof(recvBuf), 0, (SOCKADDR*)&clientName, &clientLength);
         //错误反馈
         if (recvnum == SOCKET_ERROR || recvnum == 0)
-        {
-            //printf("Recvfrom Failed: %s\n", strerror(WSAGetLastError()));
             continue; //强制开始下一次循环
-        }
         else
         {
-            getDomainName(recvBuf, recvnum);				//获取域名
+            char* domainName = (char*) malloc(FULL_DOMAIN_LENGTH);
+            getDomainName(recvBuf, domainName);				//获取域名
             find = searchInLocalDNSTable(domainName, recordNum);		//在域名解析表中查找
 
             //在域名解析表中没有找到
@@ -84,7 +81,7 @@ int main()
                 memcpy(recvBuf, &NewID, sizeof(u_short));
 
                 //打印 时间 newID 功能 域名 IP
-                PrintInfo(ntohs(NewID), find);
+                PrintInfo(ntohs(NewID), find, domainName);
 
                 //把recvbuf转发至指定的外部DNS服务器
                 iSend = sendto(servSock, recvBuf, recvnum, 0, (SOCKADDR*)&serverName, sizeof(serverName));
@@ -129,7 +126,7 @@ int main()
                 //char* NewIP;
 
                 //打印 时间 newID 功能 域名 IP
-                PrintInfo(ntohs(NewID), find);
+                PrintInfo(ntohs(NewID), find, domainName);
 
                 //从ID转换表中获取发出DNS请求者的信息
                 clientName = IDTransTable[GetId].client;
@@ -152,7 +149,7 @@ int main()
             //在域名解析表中找到
             else
             {
-                response(recvBuf, recvnum, find, localSock, clientName);
+                response(recvBuf, recvnum, find, localSock, clientName, domainName);
             }
         }
         ps:;

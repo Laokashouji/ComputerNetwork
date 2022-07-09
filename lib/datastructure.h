@@ -15,9 +15,12 @@
 #define PORT 53   //53端口号
 #define DEF_DNS_ADDRESS "192.168.31.1"	//ipconfig/all 得知外部服务器dns地址
 #define LOCAL_DNS_ADDRESS "127.0.0.1" //本地DNS服务器地址
-#define MAX_DNS_SIZE 1500//最大ID转换表大小
+#define MAX_TABLE_SIZE 1500//最大ID转换表大小
 #define NOTFOUND 32767 //没有找到
 #define ISFOUND 1
+#define DNSHEADER 12
+#define IP4_LENGTH 4
+#define MAX_IP4STRING_LENGTH 15
 #define DOMAIN_LENGTH 64 //0~63
 #define FULL_DOMAIN_LENGTH 253
 #define LOCAL_DNS_FILE "E:\\Codefield\\C\\ComputerNetwork\\doc\\dnsrelay.txt"

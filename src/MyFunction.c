@@ -14,60 +14,45 @@
 
 #pragma  comment(lib, "Ws2_32.lib") //加载 ws2_32.dll
 
-extern Translate DNSTable[MAX_DNS_SIZE];		//DNS域名解析表
-extern IDTransform IDTransTable[MAX_DNS_SIZE];	//ID转换表
+extern Translate DNSTable[MAX_TABLE_SIZE];		//DNS域名解析表
+extern IDTransform IDTransTable[MAX_TABLE_SIZE];	//ID转换表
 extern int IDcount;					//转换表中的条目个数
-extern char domainName[DOMAIN_LENGTH];					//域名
 extern SYSTEMTIME TimeOfSys;                     //系统时间
 extern int Day, Hour, Minute, Second, Milliseconds;//保存系统时间的变量
 
 //加载本地txt文件
 int loadLocalDNSTable()
 {
-    int i = 0, j = 0, num = 0;
-    char* localDNS[MAX_DNS_SIZE];
-
-    FILE* fp = fopen(LOCAL_DNS_FILE, "ab+");
+    int i = 0, j = 0;
+    char buf[MAX_TABLE_SIZE][FULL_DOMAIN_LENGTH];
+    FILE* fp = fopen(LOCAL_DNS_FILE, "rb");
     if (!fp)
     {
         printf("Open file failed.\n");
         exit(-1);
     }
-    char* reac;
-    while (i < MAX_DNS_SIZE - 1)//实现把每一行分开的操作
-    {
-        localDNS[i] = (char*)malloc(sizeof(char) * 200);
-        //localDNS[200];
-        //fscanf(fp, "%*c%*[^\n]", IPTemp[i]);
-        if (fgets(localDNS[i], 1000, fp) == NULL)//如果错误或者读到结束符，就返回NULL；
+    for (i = 0; i < MAX_TABLE_SIZE; i++)
+        if (fgets(buf[i], FULL_DOMAIN_LENGTH + MAX_IP4STRING_LENGTH, fp) == NULL)
             break;
+    if (i == MAX_TABLE_SIZE - 1)
+        printf("The local DNS-IP records are too much.\n");
 
-        i++;
-    }
-    if (i == MAX_DNS_SIZE - 1)
-        printf("The DNS record memory is full.\n");
-
-
-    for (; j < i; j++)//用来把刚分好的TEMP【i】再次切割成IP和domain
+    int num = 0;
+    for (j = 0; j < i; j++)
     {
-        char* ex1 = strtok(localDNS[j], " ");
-        char* ex2 = strtok(NULL, " ");
-        if (ex2 == NULL)
-        {
-            printf("The record is not in a correct format.\n");
-        }
+        char* ip = strtok(buf[j], " ");
+        char* domain = strtok(NULL, " ");
+        if (ip == NULL || domain == NULL)
+            printf("can't load data \"%s %s\" in line %d\n", ip, domain, j);
         else
         {
-            DNSTable[j].IP = ex1;
-            DNSTable[j].domain = ex2;
+            DNSTable[j].IP = ip;
+            DNSTable[j].domain = domain;
             num++;
         }
     }
-
-    //printf("%d\n", num);
-    //
     fclose(fp);
-    printf("Load records success.\n");
+    printf("Successfully read %d rows of local data\n", num);
     return num;
 }
 
@@ -81,16 +66,15 @@ void setTime() {
 }
 
 //获取DNS请求中的域名
-void getDomainName(char* recvbuf, int recvnum)
+void getDomainName(char *recvbuf, char *domainName)
 {
-    char queryName[DOMAIN_LENGTH];
-    memset(domainName, 0, DOMAIN_LENGTH); //全用0初始化
-    memcpy(queryName, &(recvbuf[sizeof(DNSHDR)]), recvnum - 12);	//获取请求报文中的域名表示，要去掉DNS报文首部的12字节
+    char queryName[FULL_DOMAIN_LENGTH];
+    memset(domainName, 0, FULL_DOMAIN_LENGTH);
+    memcpy(queryName, &recvbuf[DNSHEADER], FULL_DOMAIN_LENGTH);
     int len = strlen(queryName);
 
     int i = 0, j = 0, k = 0;
-    //域名转换
-    while (i < len)
+    for (i = 0; i < len;)
     {
         if (queryName[i] > 0 && queryName[i] <= 63)
             for (j = queryName[i], i++; j > 0; j--, i++, k++)
@@ -129,7 +113,7 @@ u_short ReplaceNewID(u_short OldID, SOCKADDR_IN temp, BOOL ifdone)
 }
 
 //打印 时间 ID 功能 域名 IP
-void PrintInfo(u_short ID, int find)
+void PrintInfo(u_short ID, int find, char* domainName)
 {
     //打印时间
     GetLocalTime(&TimeOfSys);
@@ -186,13 +170,13 @@ void PrintInfo(u_short ID, int find)
     }
 }
 
-void response(char *recvBuf, int recvnum, int find, SOCKET localSock, SOCKADDR_IN clientName) {
+void response(char *recvBuf, int recvnum, int find, SOCKET localSock, SOCKADDR_IN clientName, char *domainName) {
     //获取请求报文的ID
     u_short* ID = (u_short*)malloc(sizeof(u_short*));
     memcpy(ID, recvBuf, sizeof(u_short));
 
     //打印 时间 newID 功能 域名 IP
-    PrintInfo(ID, ISFOUND);
+    PrintInfo(ID, ISFOUND, domainName);
 
     //构造响应报文头
     char sendBuf[BUFSIZ];
