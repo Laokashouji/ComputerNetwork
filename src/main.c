@@ -21,7 +21,6 @@
 #include "datastructure.h"
 #include "MyFunction.h"
 #include "MySocket.h"
-#include "HashMap.h"
 
 DNSTable DNSTransTable[MAX_TABLE_SIZE + MAX_CACHE_LENGTH];        //DNS域名解析表
 IDTable IDTransTable[MAX_TABLE_SIZE];    //ID转换表
