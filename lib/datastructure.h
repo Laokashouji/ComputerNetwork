@@ -36,6 +36,7 @@ typedef struct DNSTransmit {
 typedef struct IDTransmit {
     u_short oldID;                      //原有ID
     SOCKADDR_IN client;                 //请求者套接字地址
+    int len;                            //保存请求报文的长度
     BOOL unavailable;                   //标记是否完成解析
 } IDTable;
 #endif //COMPUTERNETWORK_DATASTRUCTURE_H

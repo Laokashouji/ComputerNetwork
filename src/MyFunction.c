@@ -27,7 +27,7 @@
 
 extern DNSTable DNSTransTable[MAX_TABLE_SIZE + MAX_CACHE_LENGTH];        //DNS域名解析表
 extern IDTable IDTransTable[MAX_TABLE_SIZE];    //ID转换表
-extern int IDNum;                    //转换表中的条目个数
+extern u_short IDNum;                    //转换表中的条目个数
 extern int CacheNum;
 
 //加载本地txt文件
@@ -143,7 +143,7 @@ u_short getNewID(u_short OldID, SOCKADDR_IN sock) {
     IDTransTable[IDNum].client = sock;
     IDTransTable[IDNum].unavailable = TRUE;
 
-    return (u_short) IDNum;    //以表中下标作为新的ID
+    return IDNum;    //以表中下标作为新的ID
 }
 
 //打印 时间 ID 功能 域名 IP

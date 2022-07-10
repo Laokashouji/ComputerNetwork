@@ -16,7 +16,6 @@
 
 #include <string.h>
 #include <stdlib.h>
-#include <time.h>
 #include <unistd.h>
 #include "datastructure.h"
 #include "MyFunction.h"
@@ -24,7 +23,7 @@
 
 DNSTable DNSTransTable[MAX_TABLE_SIZE + MAX_CACHE_LENGTH];
 IDTable IDTransTable[MAX_TABLE_SIZE];
-int IDNum = 0;
+u_short IDNum = 0;
 int CacheNum = 0;
 
 int main() {
@@ -72,7 +71,7 @@ int main() {
                 //获取新ID
                 u_short NewID = htons(getNewID(ntohs(*ID), clientName));
                 memcpy(recvBuf, &NewID, sizeof(u_short));
-
+                NewID = ntohs(NewID);
                 //转发
                 int sendLength = sendto(servSock, recvBuf, recvnum, 0, (SOCKADDR *) &serverName, sizeof(serverName));
                 if (sendLength == SOCKET_ERROR || sendLength == 0) {
@@ -80,42 +79,40 @@ int main() {
                         int test = WSAGetLastError();
                         printf("%d", test);
                     }*/
+                    IDTransTable[NewID].unavailable = FALSE;
                     continue;
                 }
+                IDTransTable[NewID].len = sendLength;
 
-                //接收来自外部DNS服务器的响应报文
-                clock_t start = clock();
-                double duration = 0;
+                //接收来自外部DNS服务器的响应报文, 重复接收保证可以收到可能有的以前未收到的应答
                 recvnum = recvfrom(servSock, recvBuf, sizeof(recvBuf), 0, (SOCKADDR *) &clientName, &clientLength);
-                while ((recvnum == 0) || (recvnum == SOCKET_ERROR)) {
-                    recvnum = recvfrom(servSock, recvBuf, sizeof(recvBuf), 0, (SOCKADDR *) &clientName, &clientLength);
-                    usleep(100);
-                    duration = (clock() - start) / CLK_TCK;
-                    if (duration > WAIT_TIME)
+                while (!((recvnum == 0) || (recvnum == SOCKET_ERROR))) {
+                    //ID转换
+                    memcpy(ID, recvBuf, sizeof(u_short)); //报文前两字节为ID
+                    u_short newID = ntohs(*ID); //ntohs的功能：将网络字节序转换为主机字节序
+                    u_short oldID = htons(IDTransTable[newID].oldID);
+                    memcpy(recvBuf, &oldID, sizeof(u_short));
+
+                    //从ID转换表中获取发出DNS请求者的信息
+                    clientName = IDTransTable[newID].client;
+                    if(IDTransTable[newID].unavailable == FALSE || recvnum < IDTransTable[newID].len + 16)
                         break;
+                    IDTransTable[newID].unavailable = FALSE;
+                    //把recvbuf转发至请求者处
+                    sendto(localSock, recvBuf, recvnum, 0, (SOCKADDR *) &clientName, sizeof(clientName));
+
+                    //获取IP添加到Cache中
+                    getDomainName(recvBuf, domainName);
+                    char *IP = (char *) malloc(MAX_IP4STRING_LENGTH + 1);
+                    getIP(recvBuf, IDTransTable[newID].len, IP);
+                    if(IP != NULL && IP != "")
+                        addCache(domainName, IP);
+                    free(IP);
+
+                    recvnum = recvfrom(servSock, recvBuf, sizeof(recvBuf), 0, (SOCKADDR *) &clientName, &clientLength);
                 }
-                if (duration > WAIT_TIME)
-                    continue;
 
-                //ID转换
-                memcpy(ID, recvBuf, sizeof(u_short)); //报文前两字节为ID
-                int newID = ntohs(*ID); //ntohs的功能：将网络字节序转换为主机字节序
-                u_short oldID = htons(IDTransTable[newID].oldID);
-                memcpy(recvBuf, &oldID, sizeof(u_short));
-                IDTransTable[newID].unavailable = FALSE;
-                //从ID转换表中获取发出DNS请求者的信息
-                clientName = IDTransTable[newID].client;
 
-                //把recvbuf转发至请求者处
-                sendto(localSock, recvBuf, recvnum, 0, (SOCKADDR *) &clientName, sizeof(clientName));
-
-                //获取IP添加到Cache中
-                char *IP = (char *) malloc(MAX_IP4STRING_LENGTH + 1);
-                getIP(recvBuf, sendLength, IP);
-                if(IP != NULL && IP != "")
-                    addCache(domainName, IP);
-
-                free(IP);
                 free(ID);
 
             }
