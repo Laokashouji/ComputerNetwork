@@ -3,7 +3,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include<winSock2.h>
 #include<windows.h>
-#pragma comment(lib, "ws2_32.lib")//链接此动态链接库 windows特有
+#pragma comment(lib, "ws2_32.lib")
 #else
 #include<arpa/inet.h>//selcet
 #include<unistd.h>//uni std
@@ -18,13 +18,14 @@
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
+#include <stdio.h>
 #include "datastructure.h"
 #include "MyFunction.h"
 #include "MySocket.h"
 
-DNSTable DNSTransTable[MAX_TABLE_SIZE + MAX_CACHE_LENGTH];        //DNS域名解析表
-IDTable IDTransTable[MAX_TABLE_SIZE];    //ID转换表
-int IDNum = 0;                    //转换表中的条目个数
+DNSTable DNSTransTable[MAX_TABLE_SIZE + MAX_CACHE_LENGTH];
+IDTable IDTransTable[MAX_TABLE_SIZE];
+int IDNum = 0;
 int CacheNum = 0;
 
 int main() {
@@ -38,28 +39,28 @@ int main() {
     SOCKET servSock = createSock(1);
     SOCKET localSock = createSock(1);
 
-    //绑定套接字
-    SOCKADDR_IN serverName, clientName, localName;    //本地DNS、外部DNS和请求端三个网络套接字地址
+    struct sockaddr_in serverName, clientName, localName;
     setSockAddr(&localName, PORT, LOCAL_DNS_ADDRESS);
     setSockAddr(&serverName, PORT, DEF_DNS_ADDRESS);
 
-    bindSock(localSock, &localName);
+    bindSock(&localSock, &localName);
 
-    int recordNum = loadLocalDNSTable(); //本地DNS文件有效行数
-
+    int recordNum = loadLocalDNSTable();
     int clientLength = sizeof(clientName);
-    char recvBuf[BUFSIZE]; //接收缓存
-    //下面是服务器的具体操作
+    char recvBuf[BUFSIZE];
+
     while (1) {
-        memset(recvBuf, 0, BUFSIZE); //将接收缓存先置为全0
+        memset(recvBuf, 0, BUFSIZE);
 
         int recvnum = recvfrom(localSock, recvBuf, sizeof(recvBuf), 0, (SOCKADDR *) &clientName, &clientLength);
-        if (recvnum == SOCKET_ERROR || recvnum == 0)
+        if (recvnum == SOCKET_ERROR || recvnum == 0) {
+            usleep(50);
             continue;
+        }
         else {
             char *domainName = (char *) malloc(FULL_DOMAIN_LENGTH + 1);
-            u_short type = getDomainName(recvBuf, domainName);                //获取域名
-            int find = searchInLocalDNSTable(domainName, recordNum);        //在域名解析表中查找
+            u_short type = getDomainName(recvBuf, domainName);
+            int find = searchInLocalDNSTable(domainName, recordNum);
             //打印请求信息
             PrintInfo(find, domainName);
             //在域名解析表中没有找到
@@ -72,8 +73,13 @@ int main() {
 
                 //转发
                 int sendLength = sendto(servSock, recvBuf, recvnum, 0, (SOCKADDR *) &serverName, sizeof(serverName));
-                if (sendLength == SOCKET_ERROR || sendLength == 0)
+                if (sendLength == SOCKET_ERROR || sendLength == 0) {
+                    /*if (sendLength == SOCKET_ERROR) {
+                        int test = WSAGetLastError();
+                        printf("%d", test);
+                    }*/
                     continue;
+                }
 
                 //接收来自外部DNS服务器的响应报文
                 clock_t start = clock();
@@ -127,15 +133,12 @@ int main() {
                     ARRs = htons(0x0001);
                 }
                 memcpy(sendBuf + 2, &flags, sizeof(u_short));
-                memcpy(sendBuf + 6, &ARRs, sizeof(u_short)); //修改回答记录数，绕开ID两字节、Flags两字节、问题记录数两字节
+                memcpy(sendBuf + 6, &ARRs, sizeof(u_short));
 
-                //构造DNS应答部分
-                //参考：http://c.biancheng.net/view/6457.html
                 char answer[16];
                 int len = getAnswer(answer);
 
-                //存入本地数据中对应域名的IP地址
-                u_long IP = (u_long) inet_addr(DNSTransTable[find].IP); //inet_addr为IP地址转化函数
+                u_long IP = (u_long) inet_addr(DNSTransTable[find].IP);
                 memcpy(answer + len, &IP, sizeof(u_long));
                 len += sizeof(u_long);
 

@@ -27,7 +27,7 @@ SOCKET createSock(int unBlock);
 void setSockAddr(SOCKADDR_IN *name, int port, char* addr);
 
 //绑定socket
-void bindSock(SOCKET sock, SOCKADDR_IN *sockAddr);
+void bindSock(SOCKET *sock, SOCKADDR_IN *sockAddr);
 
 
 #endif //COMPUTERNETWORK_MYSOCKET_H
