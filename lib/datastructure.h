@@ -34,8 +34,8 @@ typedef struct DNSTransmit {
 
 //ID转换表结构
 typedef struct IDTransmit {
-    u_short oldID;            //原有ID
-    SOCKADDR_IN client;                //请求者套接字地址
-    BOOL unavailable;                        //标记是否完成解析
+    u_short oldID;                      //原有ID
+    SOCKADDR_IN client;                 //请求者套接字地址
+    BOOL unavailable;                   //标记是否完成解析
 } IDTable;
 #endif //COMPUTERNETWORK_DATASTRUCTURE_H

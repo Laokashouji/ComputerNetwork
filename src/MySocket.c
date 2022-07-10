@@ -7,11 +7,11 @@
 #include <stdio.h>
 
 SOCKET createSock(int unBlock) {
-    SOCKET sock = socket(AF_INET, SOCK_DGRAM, 0);
+    SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     //设置为非阻塞模式
     if(unBlock == 1) {
 #ifdef _WIN32
-        ioctlsocket(sock, FIONBIO, (u_long FAR *) &unBlock);//将外部套街口设置为非阻塞
+        ioctlsocket(sock, FIONBIO, (u_long FAR *) &unBlock);
 #else
         int flags = fcntl(sock, F_GETFL, 0);
         fcntl(sock, F_SETFL, flags | O_NONBLOCK);
@@ -31,6 +31,7 @@ void setSockAddr(SOCKADDR_IN *name, int port, char* addr) {
 }
 
 void bindSock(SOCKET *sock, SOCKADDR_IN *sockAddr) {
+    //绑定服务器的端口号和IP地址
     if (bind(*sock, (SOCKADDR*) sockAddr, sizeof(*sockAddr)) == -1)
     {
         printf("Bind 53 port failed.\n");

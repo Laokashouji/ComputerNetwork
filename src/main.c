@@ -18,7 +18,6 @@
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
-#include <stdio.h>
 #include "datastructure.h"
 #include "MyFunction.h"
 #include "MySocket.h"
@@ -45,7 +44,9 @@ int main() {
 
     bindSock(&localSock, &localName);
 
+    //读取本地DNS文件
     int recordNum = loadLocalDNSTable();
+
     int clientLength = sizeof(clientName);
     char recvBuf[BUFSIZE];
 
@@ -68,6 +69,7 @@ int main() {
 
                 u_short *ID = (u_short *) malloc(sizeof(u_short *));
                 memcpy(ID, recvBuf, sizeof(u_short)); //报文前两字节为ID
+                //获取新ID
                 u_short NewID = htons(getNewID(ntohs(*ID), clientName));
                 memcpy(recvBuf, &NewID, sizeof(u_short));
 
@@ -88,7 +90,7 @@ int main() {
                 while ((recvnum == 0) || (recvnum == SOCKET_ERROR)) {
                     recvnum = recvfrom(servSock, recvBuf, sizeof(recvBuf), 0, (SOCKADDR *) &clientName, &clientLength);
                     usleep(100);
-                    duration = (clock() - start) / CLK_TCK > WAIT_TIME;
+                    duration = (clock() - start) / CLK_TCK;
                     if (duration > WAIT_TIME)
                         break;
                 }
@@ -107,23 +109,26 @@ int main() {
                 //把recvbuf转发至请求者处
                 sendto(localSock, recvBuf, recvnum, 0, (SOCKADDR *) &clientName, sizeof(clientName));
 
+                //获取IP添加到Cache中
                 char *IP = (char *) malloc(MAX_IP4STRING_LENGTH + 1);
                 getIP(recvBuf, sendLength, IP);
                 if(IP != NULL && IP != "")
                     addCache(domainName, IP);
+
                 free(IP);
-                free(ID); //释放动态分配的内存
+                free(ID);
 
             }
-                //在域名解析表中找到
+            //在本地表和Cahce中找到
             else {
-                /*if(type != 1)
-                    continue;*/
+
                 DNSTransTable[find].time = 0;
+
                 //构造响应报文标志位
                 char sendBuf[MAX_DNS_SIZE];
                 memcpy(sendBuf, recvBuf, recvnum);
                 u_short flags, ARRs;
+
                 //构造相应报文应答资源个数
                 if (strcmp(DNSTransTable[find].IP, "0.0.0.0") == 0 || type != 1) {
                     flags = htons(0x8183);

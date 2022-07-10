@@ -10,50 +10,61 @@
 
 int main(int argc, char const *argv[])
 {
-    if(argc < 3)
-    {
-        perror("./a.out ip port");
-        exit(1);
-    }
-
-    printf("%s\n", argv[1]);
-    printf("%s\n", argv[2]);
-
     WSADATA wsd;
     WSAStartup(MAKEWORD(2,2),&wsd);
-    int sockfd;
-    if((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1){
-        perror("failed to create a socket");
-        exit(1);
-    }
-
-    struct sockaddr_in serveraddr;
-    serveraddr.sin_family = AF_INET;
-    serveraddr.sin_port = htons(atoi(argv[2]));
-    serveraddr.sin_addr.s_addr = inet_addr(argv[1]);
-
-    if(bind(sockfd, (struct sockaddr*) &serveraddr, sizeof(serveraddr)) == -1)
+    if(argc < 3)
     {
-        perror("failed to bind socket");
+        fprintf(stderr, "Usage: %s <ip> <port>\n", argv[0]);
         exit(1);
     }
 
-    char buf[N] = "";
-    struct sockaddr_in clientaddr;
-    socklen_t addrlen = sizeof(struct sockaddr_in);
+    int sockfd; //文件描述符
+    struct sockaddr_in serveraddr; //服务器网络信息结构体
+    socklen_t addrlen = sizeof(serveraddr);
+
+    //第一步：创建套接字
+    if((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+    {
+        perror("fail to socket");
+        exit(1);
+    }
+
+    //第二步：填充服务器网络信息结构体
+    //inet_addr：将点分十进制字符串ip地址转化为整形数据
+    //htons：将主机字节序转化为网络字节序
+    //atoi：将数字型字符串转化为整形数据
+    serveraddr.sin_family = AF_INET;
+    serveraddr.sin_addr.s_addr = inet_addr(argv[1]);
+    serveraddr.sin_port = htons(atoi(argv[2]));
+
+    //第三步：将套接字与服务器网络信息结构体绑定
+    if(bind(sockfd, (struct sockaddr *)&serveraddr, addrlen) < 0)
+    {
+        perror("fail to bind");
+        exit(1);
+    }
+
     while(1)
     {
-        if(recvfrom(sockfd, buf, N, 0, (struct sockaddr *) &clientaddr, &addrlen) == -1)
+        //第四步：进行通信
+        char text[32] = "";
+        struct sockaddr_in clientaddr;
+        if(recvfrom(sockfd, text, sizeof(text), 0, (struct sockaddr *)&clientaddr, &addrlen) < 0)
         {
-            perror("failed to receive socket message");
+            perror("fail to recvfrom");
             exit(1);
         }
-        else {
-            printf("ip:%s, port:%d\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
-            printf("from client:%s\n", buf);
+        printf("[%s - %d]: %s\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port), text);
+
+        strcat(text, " (response from server)");
+
+        if(sendto(sockfd, text, sizeof(text), 0, (struct sockaddr *)&clientaddr, addrlen) < 0)
+        {
+            perror("fail to sendto");
+            exit(1);
         }
     }
-
+    closesocket(sockfd);
     WSACleanup();
     return 0;
 }

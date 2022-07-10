@@ -32,6 +32,7 @@ extern int CacheNum;
 
 //加载本地txt文件
 int loadLocalDNSTable() {
+
     int i = 0, j = 0;
     char buf[MAX_TABLE_SIZE][FULL_DOMAIN_LENGTH];
     FILE *fp = fopen(LOCAL_DNS_FILE, "rb");
@@ -69,6 +70,7 @@ u_short getDomainName(char *recvbuf, char *domainName) {
     memcpy(queryName, recvbuf + DNSHEADER, FULL_DOMAIN_LENGTH + 10);
     int len = strlen(queryName);
 
+    //读取域名
     int i = 0, j = 0, k = 0;
     for (i = 0; i < len;) {
         if (queryName[i] > 0 && queryName[i] <= 63)
@@ -80,6 +82,7 @@ u_short getDomainName(char *recvbuf, char *domainName) {
     }
     domainName[k] = '\0';
 
+    //获取询问的类型
     u_short *buf = (u_short *) malloc(sizeof(u_short *));
     memcpy(buf, recvbuf + DNSHEADER + k + 2, sizeof(u_short));
     u_short type = ntohs(*buf);
@@ -109,22 +112,25 @@ void getIP(char *recvBuf, int sendLen, char *IP) {
     IP = NULL;
 }
 
-//判断能不能在本中找到DNS请求中的域名，找到返回下标
+//判断能不能在本地文件和cache中找到DNS请求中的域名，找到返回下标
 int searchInLocalDNSTable(char *domainName, int num) {
     char *domain = (char *) malloc(sizeof(char) * (FULL_DOMAIN_LENGTH + 2));
     strcpy(domain, domainName);
+#ifdef _WIN32
     strcat(domain, "\r\n");
-
-    for (int i = 0; i < num; i++)
-        if (DNSTransTable[i].domain)
-            if (strcmp(DNSTransTable[i].domain, domain) == 0)
-                return i;
-
+#else
+    strcat(domain, "\n");
+#endif
     for (int i = 0; i < CacheNum; i++) {
         if (DNSTransTable[i + MAX_TABLE_SIZE].domain)
             if (strcmp(DNSTransTable[i + MAX_TABLE_SIZE].domain, domain) == 0)
                 return i + MAX_TABLE_SIZE;
     }
+
+    for (int i = 0; i < num; i++)
+        if (DNSTransTable[i].domain)
+            if (strcmp(DNSTransTable[i].domain, domain) == 0)
+                return i;
 
     return NOTFOUND;
 }
@@ -152,11 +158,10 @@ void PrintInfo(int find, char *domainName) {
     if (find == NOTFOUND) {
         //中继功能
         printf("relay\t");
-        //打印域名
         printf("%s\t", domainName);
         printf("\n");
     } else {
-        if (strcmp(DNSTransTable[find].IP, "0.0.0.0") == 0)  //不良网站拦截
+        if (strcmp(DNSTransTable[find].IP, "0.0.0.0") == 0)
         {
             //屏蔽功能
             printf("shield\t");
@@ -165,10 +170,8 @@ void PrintInfo(int find, char *domainName) {
             printf("%s\n", DNSTransTable[find].IP);
         } else {
             //服务器功能
-            printf("LocalServer\t");
-            //打印域名
+            printf("Local\t");
             printf("***%s\t", domainName);
-            //打印IP
             printf("%s\n", DNSTransTable[find].IP);
         }
     }
@@ -205,8 +208,11 @@ void addCache(char *domain, char *IP) {
     char *IPName = (char *) malloc(sizeof(char) * (MAX_IP4STRING_LENGTH + 1));
     strcpy(domainName, domain);
     strcpy(IPName, IP);
+#ifdef _WIN32
     strcat(domainName, "\r\n");
-
+#else
+    strcat(domainName, "\n");
+#endif
     if (CacheNum < MAX_CACHE_LENGTH) {
         DNSTransTable[MAX_TABLE_SIZE + CacheNum].IP = IPName;
         DNSTransTable[MAX_TABLE_SIZE + CacheNum].domain = domainName;
